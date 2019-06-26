@@ -1,5 +1,5 @@
 # Conway
-An OpenCL/OpenGL implementation of Conway's Game of Life.
+An OpenCL/OpenGL implementation of Conway's Game of Life, written and implemented by Stephen Newman. Some small segments of code are from various online sources, which are linked at the relevant points.
 
 Released under GNU General Public License v3.0.
 
