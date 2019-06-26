@@ -1,0 +1,28 @@
+#version 410
+
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 pos;
+layout(location = 1) in vec3 inColor;
+layout(location = 2) in vec2 texCoord;
+
+out vec2 outTexCoord;
+
+// Values that stay constant for the whole mesh.
+// uniform mat4 MVP;
+
+uniform int zoom;
+uniform vec2 cameraPos;
+uniform int game_width;
+uniform int game_height;
+
+void main(){
+
+    // Output position of the vertex, in clip space
+    vec3 offset = vec3(cameraPos,0);
+    offset.x/=game_width; offset.y/=game_height;
+    offset = (pos-offset)*zoom; offset.z=pos.z;
+    gl_Position =  vec4(offset, 1.0f);
+
+    // UV of the vertex. No special space for this one.
+    outTexCoord=texCoord;
+}
