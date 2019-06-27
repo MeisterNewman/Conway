@@ -467,8 +467,11 @@ int main(){
 
 	clock_t t=clock();
 	clock_t frame_clock=clock();
+	clock_t refresh_clock=clock();
+	clock_t screenshift_clock=clock();
 	
 	float refresh_rate = 144.0f; //Sets frame rate
+	float game_frame_rate = 144.0f; //Sets game frame rate
 	bool space_pressed = false;
 	GLfloat camera_pos[2]={0.0,0.0};
 	int zoom=1;
@@ -487,9 +490,10 @@ int main(){
 
 
 	glEnable(GL_DEBUG_OUTPUT);
+	bool speed_adjust_pressed=false;
 
 	while (glfwWindowShouldClose(window) == false){
-		printf("Clocks per second: %li\n", CLOCKS_PER_SEC);
+		//printf("Clocks per second: %li\n", CLOCKS_PER_SEC);
 		printf("Frame time: %li, FPS: %f\n", clock()-t, CLOCKS_PER_SEC/((float)clock()-t));
 		t=clock();
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
@@ -503,18 +507,41 @@ int main(){
 		if (glfwGetKey(window, GLFW_KEY_SPACE) != GLFW_PRESS){
 			space_pressed=false;
 		}
+
 		if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
-			camera_pos[0]-=1000/refresh_rate/(float)zoom;
+			camera_pos[0]-=(clock()-screenshift_clock)*500.0f/CLOCKS_PER_SEC/(float)zoom;
 		}
 		if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
-			camera_pos[0]+=1000/refresh_rate/(float)zoom;
+			camera_pos[0]+=(clock()-screenshift_clock)*500.0f/CLOCKS_PER_SEC/(float)zoom;
 		}
 		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
-			camera_pos[1]+=1000/refresh_rate/(float)zoom;
+			camera_pos[1]+=(clock()-screenshift_clock)*500.0f/CLOCKS_PER_SEC/(float)zoom;
 		}
 		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
-			camera_pos[1]-=1000/refresh_rate/(float)zoom;
+			camera_pos[1]-=(clock()-screenshift_clock)*500.0f/CLOCKS_PER_SEC/(float)zoom;
 		}
+		screenshift_clock=clock();
+
+		if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS && !speed_adjust_pressed){
+			game_frame_rate/=1.5f;
+			speed_adjust_pressed=true;
+		}
+		if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS && !speed_adjust_pressed){
+			game_frame_rate*=1.5f;
+			speed_adjust_pressed=true;
+		}
+		if (glfwGetKey(window, GLFW_KEY_EQUAL) != GLFW_PRESS && glfwGetKey(window, GLFW_KEY_MINUS) != GLFW_PRESS){
+			speed_adjust_pressed=false;
+		}
+		printf("Game frame rate: %f\n", game_frame_rate);
+		if (game_frame_rate<1){
+			game_frame_rate=1;
+		}
+		if (game_frame_rate>1000){
+			game_frame_rate=1000;
+		}
+
+
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS){
 			ret = clEnqueueNDRangeKernel(command_queue, initializeState, 1, NULL, &game_pixels, &work_group_size, 0, NULL, NULL);
 		}
@@ -597,7 +624,7 @@ int main(){
 			old_camera_pos[0]=camera_pos[0]; old_camera_pos[1]=camera_pos[1];
 		}
 		glFinish();
-		printf("Time pre-acquire: %li\n", clock()-t);
+		//printf("Time pre-acquire: %li\n", clock()-t);
 		//Acquire the board image. Then update the board state if needed, and write it to the image
 		ret = clEnqueueAcquireGLObjects(command_queue, 1, &CL_board_texture, 0, NULL, NULL);
 		//printf("%li\n",(clock()-t)/CLOCKS_PER_SEC);
@@ -615,31 +642,34 @@ int main(){
 				}
 			}
 			ret = clFinish(command_queue);
-			printf("Time post-adjacencies: %li\n", clock()-t);
+			//printf("Time post-adjacencies: %li\n", clock()-t);
 			ret = clEnqueueNDRangeKernel(command_queue, updateState, 1, NULL, &game_pixels, &work_group_size, 0, NULL, NULL);
 		}
 		ret = clEnqueueNDRangeKernel(command_queue, writeStateToImage, 1, NULL, &game_pixels, &work_group_size, 0, NULL, NULL);
 		ret = clEnqueueReleaseGLObjects(command_queue, 1, &CL_board_texture, 0, NULL, NULL);
 		ret = clFinish(command_queue);
-		printf("Time post-release: %li\n", clock()-t);
+		//printf("Time post-release: %li\n", clock()-t);
 
 
 		// view_center_x = view_x + current_screen_width; view_center_x = view_y + current_screen_height;
 
+	
+		if (((float)clock()-refresh_clock)/CLOCKS_PER_SEC>1.0f/refresh_rate){ // Change for different displays
+			glClearColor(0, 0, 0, 255);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+			glFinish();
+			//printf("Time post-draw: %li\n", clock()-t);
+			glfwSwapBuffers(window);
+			refresh_clock=clock();
+		}
+		if (!paused){
+			while (((float)clock()-frame_clock)/CLOCKS_PER_SEC<1.0f/game_frame_rate){};
+		}
 
-
-		
-		//if (clock()-frame_clock>1.0f/refresh_rate){ // Change for different displays
-		glClearColor(0, 0, 0, 255);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-		glFinish();
-		printf("Time post-draw: %li\n", clock()-t);
-		glfwSwapBuffers(window);
 		frame_clock=clock();
-		//}
 		glFinish();
-		printf("Time post-swap: %li\n", clock()-t);
+		//printf("Time post-swap: %li\n", clock()-t);
 		glfwPollEvents();
 		glFinish();
 	}
